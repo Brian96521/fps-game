@@ -27,70 +27,71 @@ function init() {
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
 
-  camera.position.y = 1.6;
-
-  for (let i = 0; i < 3; i++) {
-    const enemy = createEnemy();
-    enemies.push(enemy);
-    scene.add(enemy);
-  }
-
   document.addEventListener('click', () => {
-    if (isGameStarted) shoot();
+    if (!isGameStarted) {
+      controls.lock();
+      isGameStarted = true;
+    } else {
+      shoot();
+    }
   });
-}
 
-function createEnemy() {
-  const geometry = new THREE.BoxGeometry();
-  const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-  const enemy = new THREE.Mesh(geometry, material);
-  enemy.position.set(Math.random() * 50 - 25, 0.5, Math.random() * 50 - 25);
-  return enemy;
+  spawnEnemies();
+  animate();
 }
 
 function shoot() {
-  const bullet = new THREE.Mesh(
-    new THREE.SphereGeometry(0.05),
-    new THREE.MeshBasicMaterial({ color: 0xffff00 })
-  );
+  const geometry = new THREE.SphereGeometry(0.1, 8, 8);
+  const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+  const bullet = new THREE.Mesh(geometry, material);
   bullet.position.copy(camera.position);
-  bullet.userData.velocity = new THREE.Vector3();
-  camera.getWorldDirection(bullet.userData.velocity);
-  bullet.userData.velocity.multiplyScalar(1);
-  scene.add(bullet);
+  bullet.velocity = new THREE.Vector3();
+  bullet.velocity.setFromMatrixColumn(camera.matrix, 0);
+  bullet.velocity.crossVectors(camera.up, bullet.velocity);
+  bullet.velocity.crossVectors(bullet.velocity, camera.up);
+  bullet.velocity.normalize().multiplyScalar(1);
   bullets.push(bullet);
+  scene.add(bullet);
+}
+
+function spawnEnemies() {
+  for (let i = 0; i < 3; i++) {
+    const enemy = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ color: 0xff0000 })
+    );
+    enemy.position.set(Math.random() * 20 - 10, 0.5, Math.random() * 20 - 10);
+    enemy.velocity = new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5);
+    enemies.push(enemy);
+    scene.add(enemy);
+  }
 }
 
 function animate() {
   requestAnimationFrame(animate);
 
-  bullets.forEach((b, index) => {
-    b.position.add(b.userData.velocity);
-    enemies.forEach((e, ei) => {
-      if (b.position.distanceTo(e.position) < 1) {
-        scene.remove(e);
-        enemies.splice(ei, 1);
-        const newEnemy = createEnemy();
-        enemies.push(newEnemy);
-        scene.add(newEnemy);
+  bullets.forEach((bullet, index) => {
+    bullet.position.add(bullet.velocity);
+    enemies.forEach((enemy, eIndex) => {
+      if (bullet.position.distanceTo(enemy.position) < 1) {
+        scene.remove(enemy);
+        enemies.splice(eIndex, 1);
         score++;
-        if (score >= maxScore) alert('You win!');
+        if (score >= maxScore) alert('You Win!');
       }
     });
-    if (b.position.length() > 100) {
-      scene.remove(b);
-      bullets.splice(index, 1);
+  });
+
+  enemies.forEach(enemy => {
+    enemy.position.add(enemy.velocity);
+    // 簡單邊界反彈
+    if (Math.abs(enemy.position.x) > 50 || Math.abs(enemy.position.z) > 50) {
+      enemy.velocity.negate();
     }
   });
 
+  controls.update();
   renderer.render(scene, camera);
 }
 
-window.startGame = () => {
-  document.getElementById('overlay').style.display = 'none';
-  controls.lock();
-  isGameStarted = true;
-};
-
-init();
-animate();
+window.onload = init;
